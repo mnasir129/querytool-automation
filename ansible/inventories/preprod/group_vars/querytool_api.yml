@@ -1,0 +1,13 @@
+---
+
+querytool_api_folder_name: "QueryToolAPI"
+
+querytool_api_deployment_path: >-
+  D:\Apps\{{ querytool_api_folder_name }}
+
+querytool_api_application_pool_name: "QueryToolAPI"
+
+querytool_api_application_pool_port: 8089
+
+querytool_api_application_healthcheck_url: >-
+  http://{{ ansible_facts['fqdn'] }}:{{ querytool_api_application_pool_port }}/health
