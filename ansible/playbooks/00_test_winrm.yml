@@ -1,0 +1,21 @@
+---
+
+- name: Validate QueryTool Windows connectivity
+  hosts: windows
+  gather_facts: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: Test WinRM connection
+      ansible.windows.win_ping:
+
+    - name: Show resolved host information
+      ansible.builtin.debug:
+        msg:
+          - "Inventory host: {{ inventory_hostname }}"
+          - "Windows IP: {{ ansible_host }}"
+          - "Computer name: {{ ansible_facts['hostname'] }}"
+          - "FQDN: {{ ansible_facts['fqdn'] }}"
+          - "Connected user: {{ ansible_facts['user_id'] }}"
+          - "Target environment: {{ edex_target_environment }}"
+          - "Backup base: {{ edex_backup_base_location }}"
