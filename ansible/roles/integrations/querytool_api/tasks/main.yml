@@ -1,0 +1,14 @@
+---
+
+- name: Show QueryTool API variables
+  ansible.builtin.debug:
+    msg: "{{ item }}: {{ lookup('ansible.builtin.vars', item) }}"
+  loop: "{{ query('ansible.builtin.varnames', '^querytool_api_.+') }}"
+
+- name: Run QueryTool API full deployment
+  ansible.builtin.import_tasks: full-deploy.yml
+  when: querytool_api_code_tarball is defined
+
+- name: Redeploy QueryTool API appsettings
+  ansible.builtin.import_tasks: redeploy_appsettings.yaml
+  when: redeploy_appsettings_querytool_api is defined
