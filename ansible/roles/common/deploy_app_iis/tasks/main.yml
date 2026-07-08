@@ -1,0 +1,69 @@
+---
+
+- name: Show IIS deployment variables
+  ansible.builtin.debug:
+    msg: "{{ item }}: {{ lookup('ansible.builtin.vars', item) }}"
+  loop: "{{ query('ansible.builtin.varnames', '^iis_.+') }}"
+
+- name: Create backup folder
+  ansible.windows.win_file:
+    path: "{{ iis_backup_directory | mandatory }}"
+    state: directory
+
+- name: Backup Application
+  ansible.windows.win_copy:
+    src: "{{ iis_application_directory | mandatory }}"
+    dest: "{{ iis_backup_directory | mandatory }}"
+    remote_src: true
+  notify: "Stop apppool for {{ iis_application_name | mandatory }}"
+
+- name: Flush handlers after backup
+  ansible.builtin.meta: flush_handlers
+
+- name: Remove directory structure
+  ansible.windows.win_file:
+    path: "{{ iis_application_directory | mandatory }}"
+    state: absent
+
+- name: Create base directory
+  ansible.windows.win_file:
+    path: "{{ iis_application_directory | mandatory }}"
+    state: directory
+
+- name: Copy Application Tarball
+  ansible.windows.win_copy:
+    src: "{{ iis_source_code_tarball | mandatory }}"
+    dest: "{{ iis_application_directory | mandatory }}\\{{ iis_application_name | mandatory }}.tar.gz"
+
+- name: Copy Application Settings
+  ansible.windows.win_copy:
+    src: "{{ iis_application_settings_file | mandatory }}"
+    dest: "{{ iis_application_directory | mandatory }}\\appsettings.{{ edex_target_environment | mandatory }}.json"
+  notify: "Start apppool for {{ iis_application_name | mandatory }}"
+
+- name: Uncompress tarball
+  ansible.windows.win_shell: "tar -xvf {{ iis_application_name | mandatory }}.tar.gz"
+  args:
+    chdir: "{{ iis_application_directory | mandatory }}"
+  notify: "Start apppool for {{ iis_application_name | mandatory }}"
+
+- name: Change web.config environment reference
+  community.windows.win_lineinfile:
+    path: "{{ iis_application_directory | mandatory }}\\web.config"
+    regexp: '^(\s*)<environmentVariable name="ASPNETCORE_ENVIRONMENT" value="CICD" />'
+    line: '\1<environmentVariable name="ASPNETCORE_ENVIRONMENT" value="{{ edex_target_environment | mandatory }}" />'
+    state: present
+
+- name: Remove tarball
+  ansible.windows.win_file:
+    path: "{{ iis_application_directory | mandatory }}\\{{ iis_application_name | mandatory }}.tar.gz"
+    state: absent
+
+- name: Flush handlers after deployment
+  ansible.builtin.meta: flush_handlers
+  when: not iis_skip_restart
+
+- name: Run startup readiness probe
+  ansible.builtin.include_role:
+    name: common/healthcheck_app_iis
+  when: not iis_skip_restart

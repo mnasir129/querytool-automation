@@ -1,0 +1,14 @@
+---
+
+- name: "Stop apppool for {{ iis_application_name | mandatory }}"
+  ansible.windows.win_shell: >
+    C:\Windows\System32\inetsrv\appcmd
+    stop apppool
+    /apppool.name:{{ iis_application_pool_name | mandatory }}
+  become: true
+  become_method: runas
+  become_user: "{{ ansible_facts['user_id'] }}"
+  register: stop_apppool_result
+  failed_when:
+    - stop_apppool_result.rc != 0
+    - stop_apppool_result.stdout is not ansible.builtin.regex('Application pool .* already stopped', ignorecase=True)

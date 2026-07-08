@@ -1,0 +1,17 @@
+---
+
+- name: "Check if application {{ iis_application_name | mandatory }} is running"
+  ansible.windows.win_uri:
+    url: "{{ iis_application_healthcheck_url | mandatory }}"
+    validate_certs: false
+  register: uri_output
+  until: uri_output.status_code == 200
+  retries: 6
+  delay: 20
+
+- name: Show health check result
+  ansible.builtin.debug:
+    msg:
+      - "Application: {{ iis_application_name }}"
+      - "Health URL: {{ iis_application_healthcheck_url }}"
+      - "Status code: {{ uri_output.status_code }}"
