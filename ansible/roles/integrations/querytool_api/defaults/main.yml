@@ -1,0 +1,6 @@
+---
+
+querytool_api_application_name: "QueryToolAPI"
+
+querytool_api_application_settings_file: >-
+  {{ inventory_dir }}/files/integrations/querytool_api/appsettings.json

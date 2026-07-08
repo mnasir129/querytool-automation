@@ -1,0 +1,20 @@
+---
+
+- name: Show IIS appsettings redeployment variables
+  ansible.builtin.debug:
+    msg: "{{ item }}: {{ lookup('ansible.builtin.vars', item) }}"
+  loop: "{{ query('ansible.builtin.varnames', '^iis_.+') }}"
+
+- name: Deploy appsettings.json
+  ansible.windows.win_copy:
+    src: "{{ iis_application_settings_file | mandatory }}"
+    dest: "{{ iis_application_directory | mandatory }}\\appsettings.{{ edex_target_environment | mandatory }}.json"
+
+- name: Recycle application pool after appsettings deployment
+  ansible.builtin.import_role:
+    name: common/stop_start_app_iis
+    tasks_from: recycle_app_iis.yml
+
+- name: Run readiness probe after appsettings deployment
+  ansible.builtin.include_role:
+    name: common/healthcheck_app_iis

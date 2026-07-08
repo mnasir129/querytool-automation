@@ -1,0 +1,6 @@
+# Jenkins and Ansible runtime credential files
+ansible/vault_password
+ansible/windows_password
+
+# Ansible retry files
+*.retry
