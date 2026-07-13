@@ -1,0 +1,3 @@
+---
+
+- ansible.builtin.import_playbook: redeploy_appsettings_integration_apis.yml

@@ -1,0 +1,12 @@
+---
+
+- name: Redeploy QueryTool API appsettings
+  hosts: querytool_api:&windows
+  gather_facts: true
+  serial: "{{ deploy_parallelism | default('25%') }}"
+  any_errors_fatal: true
+
+  roles:
+    - role: integrations/querytool_api
+      when:
+        - redeploy_appsettings_querytool_api is defined

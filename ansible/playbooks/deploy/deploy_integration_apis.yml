@@ -1,0 +1,13 @@
+---
+
+- name: Deploy QueryTool API
+  hosts: querytool_api:&windows
+  gather_facts: true
+  serial: "{{ deploy_parallelism | default('25%') }}"
+  any_errors_fatal: true
+
+  roles:
+    - role: integrations/querytool_api
+      source_code_path: "{{ querytool_api_code_tarball | mandatory }}"
+      when:
+        - querytool_api_code_tarball is defined
