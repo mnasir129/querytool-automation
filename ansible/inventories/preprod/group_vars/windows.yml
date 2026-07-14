@@ -10,4 +10,4 @@ ansible_user: "{{ lookup('env', 'QUERYTOOL_WINRM_USER') }}"
 ansible_password: "{{ lookup('env', 'QUERYTOOL_WINRM_PASSWORD') }}"
 
 edex_target_environment: "PreProd"
-edex_backup_base_location: "D:\\QueryToolBackup\\{{ '%Y%m%d' | ansible.builtin.strftime }}"
+edex_backup_base_location: "C:\\QueryToolBackup\\{{ '%Y%m%d' | ansible.builtin.strftime }}"

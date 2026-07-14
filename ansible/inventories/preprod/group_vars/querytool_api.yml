@@ -3,7 +3,7 @@
 querytool_api_folder_name: "QueryToolAPI"
 
 querytool_api_deployment_path: >-
-  D:\Apps\{{ querytool_api_folder_name }}
+  C:\Apps\{{ querytool_api_folder_name }}
 
 querytool_api_application_pool_name: "QueryToolAPI"
 
