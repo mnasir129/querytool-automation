@@ -1,5 +1,5 @@
 [windows]
-querytool_iis ansible_host=172.28.48.166
+querytool_iis ansible_host=172.28.51.217
 
 [querytool_api]
 querytool_iis
