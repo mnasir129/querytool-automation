@@ -1,0 +1,208 @@
+@Library('hip-common-lib') _
+
+def queryToolAPIZip = "queryToolAPI.tar.gz"
+
+pipeline {
+    agent any
+
+    options {
+        ansiColor('xterm')
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+        disableConcurrentBuilds()
+    }
+
+    parameters {
+        booleanParam(
+            name: 'QUERYTOOL_API',
+            defaultValue: false,
+            description: 'Deploy QueryTool API'
+        )
+    }
+
+    environment {
+        DOTNET_IMAGE = '172.28.52.31:8081/docker-hosted/local-dotnet9:latest'
+        ANSIBLE_IMAGE = '172.28.52.31:8081/docker-hosted/local-ansible-winrm:latest'
+
+        NUGET_GROUP_URL = 'http://172.28.52.31:8081/repository/nuget-group/index.json'
+
+        QUERYTOOL_REPO = 'https://github.com/mnasir129/querytool.git'
+        AUTOMATION_REPO = 'https://github.com/mnasir129/querytool-automation.git'
+
+        QUERYTOOL_BRANCH = 'feature/preprod'
+        AUTOMATION_BRANCH = 'develop'
+    }
+
+    stages {
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (!params.QUERYTOOL_API) {
+                        error("No deployment parameter selected. Select QUERYTOOL_API.")
+                    }
+                }
+            }
+        }
+
+        stage('Checkout QueryTool Code') {
+            steps {
+                dir('querytool') {
+                    git branch: "${QUERYTOOL_BRANCH}",
+                        credentialsId: 'github-token',
+                        url: "${QUERYTOOL_REPO}"
+                }
+            }
+        }
+
+        stage('Build QueryTool Artifact') {
+            agent {
+                docker {
+                    image "${DOTNET_IMAGE}"
+                    registryUrl 'http://172.28.52.31:8081'
+                    registryCredentialsId 'nexus-creds'
+                    reuseNode true
+                    args '-e HOME=/tmp -e DOTNET_CLI_HOME=/tmp -e DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1'
+                }
+            }
+
+            steps {
+                script {
+                    if (params.QUERYTOOL_API) {
+                        ae.damanhealth.DockerDotnet.setupDotnetNonProdRepositories(
+                            this,
+                            "${NUGET_GROUP_URL}"
+                        )
+
+                        ae.damanhealth.DockerDotnet.runDotnetShellScriptWithProxy(this, """
+                            cd \$WORKSPACE/querytool/QueryTool.API
+
+                            rm -rf deploy
+                            rm -f ${queryToolAPIZip}
+
+                            dotnet publish \
+                                --configuration Release \
+                                -p:PublishProfile=CICD
+
+                            tar -cvzf ${queryToolAPIZip} \
+                                -C deploy \
+                                --exclude='appsettings*.json' \
+                                .
+
+                            echo "Created artifact:"
+                            ls -lh ${queryToolAPIZip}
+
+                            echo "Checking that appsettings files are excluded..."
+                            if tar -tzf ${queryToolAPIZip} | grep -q 'appsettings.*\\.json'; then
+                                echo "ERROR: appsettings file found in artifact"
+                                exit 1
+                            else
+                                echo "PASS: appsettings excluded from artifact"
+                            fi
+                        """)
+
+                        stash name: 'QueryToolAPI',
+                            includes: "querytool/QueryTool.API/${queryToolAPIZip}",
+                            allowEmpty: false
+                    }
+                }
+            }
+        }
+
+        stage('Checkout Automation Code') {
+            steps {
+                dir('automation') {
+                    git branch: "${AUTOMATION_BRANCH}",
+                        credentialsId: 'github-token',
+                        url: "${AUTOMATION_REPO}"
+                }
+            }
+        }
+
+        stage('Deploy QueryTool API') {
+            agent {
+                docker {
+                    image "${ANSIBLE_IMAGE}"
+                    registryUrl 'http://172.28.52.31:8081'
+                    registryCredentialsId 'nexus-creds'
+                    reuseNode true
+                    args '--network host -e HOME=/tmp'
+                }
+            }
+
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'windows-creds',
+                        usernameVariable: 'QUERYTOOL_WINRM_USER',
+                        passwordVariable: 'QUERYTOOL_WINRM_PASSWORD'
+                    ),
+                    string(
+                        credentialsId: 'querytool-ansible-vault-password',
+                        variable: 'VAULT_PASSWORD'
+                    )
+                ]) {
+                    script {
+                        if (params.QUERYTOOL_API) {
+                            sh """
+                                set -e
+
+                                mkdir -p \$WORKSPACE/artifacts
+                                cd \$WORKSPACE/artifacts
+                            """
+
+                            dir('artifacts') {
+                                unstash 'QueryToolAPI'
+                            }
+
+                            sh """
+                                set -e
+
+                                cd \$WORKSPACE/automation/ansible
+
+                                echo "\$VAULT_PASSWORD" > vault_password
+                                chmod 600 vault_password
+
+                                export ANSIBLE_CONFIG=\$WORKSPACE/automation/ansible/ansible.cfg
+                                export ANSIBLE_VAULT_PASSWORD_FILE=\$WORKSPACE/automation/ansible/vault_password
+
+                                echo "Running QueryTool API deployment through Ansible"
+
+                                ansible-playbook -v \
+                                    -i inventories/preprod/hosts \
+                                    playbooks/deploy/deploy_integration_apis.yml \
+                                    --extra-vars 'deploy_parallelism=100%' \
+                                    --extra-vars "querytool_api_code_tarball=\$WORKSPACE/artifacts/querytool/QueryTool.API/${queryToolAPIZip}"
+                            """
+                        }
+                    }
+                }
+            }
+
+            post {
+                always {
+                    sh """
+                        rm -f \$WORKSPACE/automation/ansible/vault_password || true
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'QueryTool API deployment completed successfully.'
+        }
+
+        failure {
+            echo 'QueryTool API deployment failed.'
+        }
+
+        always {
+            cleanWs(
+                deleteDirs: true,
+                disableDeferredWipeout: true,
+                notFailBuild: true
+            )
+        }
+    }
+}
